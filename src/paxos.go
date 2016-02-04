@@ -127,21 +127,17 @@ func (px *Paxos) Prepare(args *PrepareArgs, reply *PrepareReply) error {
 	}
 
 	if reply.Err == OK {
-		/*
-			if (PrintDebug) {
-				fmt.Printf("%s:%d accept prepare\n", px.peers[px.me], args.Seq)
-			}
-		*/
+		if PrintDebug {
+			fmt.Printf("%s:%d accept prepare\n", px.peers[px.me], args.Seq)
+		}
 		reply.AcceptPnum = instance.n_a
 		reply.AcceptValue = instance.v_a
 
 		px.instances[args.Seq].n_p = args.PNum
 	} else {
-		/*
-			if (PrintDebug) {
-				fmt.Printf("%s:%d reject prepare\n", px.peers[px.me], args.Seq)
-			}
-		*/
+		if PrintDebug {
+			fmt.Printf("%s:%d reject prepare\n", px.peers[px.me], args.Seq)
+		}
 	}
 
 	return nil
@@ -164,20 +160,16 @@ func (px *Paxos) Accept(args *AcceptArgs, reply *AcceptReply) error {
 	}
 
 	if reply.Err == OK {
-		/*
-			if (PrintDebug) {
-				fmt.Printf("%s:%d accept accept %v\n", px.peers[px.me], args.Seq, args.Value)
-			}
-		*/
+		if PrintDebug {
+			fmt.Printf("%s:%d accept accept %v\n", px.peers[px.me], args.Seq, args.Value)
+		}
 		px.instances[args.Seq].n_a = args.PNum
 		px.instances[args.Seq].n_p = args.PNum
 		px.instances[args.Seq].v_a = args.Value
 	} else {
-		/*
-			if (PrintDebug) {
-				fmt.Printf("%s:%d reject accept %v\n", px.peers[px.me], args.Seq, args.Value)
-			}
-		*/
+		if PrintDebug {
+			fmt.Printf("%s:%d reject accept %v\n", px.peers[px.me], args.Seq, args.Value)
+		}
 	}
 
 	return nil
@@ -187,11 +179,9 @@ func (px *Paxos) Decide(args *DecideArgs, reply *DecideReply) error {
 	px.mu.Lock()
 	defer px.mu.Unlock()
 
-	/*
-		if (PrintDebug) {
-			fmt.Printf("%s decide %d:%v\n", px.peers[px.me], args.Seq, args.Value)
-		}
-	*/
+	if PrintDebug {
+		fmt.Printf("%s decide %d:%v\n", px.peers[px.me], args.Seq, args.Value)
+	}
 	_, exist := px.instances[args.Seq]
 	if !exist {
 		px.instances[args.Seq] = px.newInstance()
@@ -215,7 +205,7 @@ func (px *Paxos) majority() int {
 }
 
 func (px *Paxos) generatePNum() string {
-	begin := time.Date(2014, time.May, 6, 22, 0, 0, 0, time.UTC)
+	begin := time.Date(2015, time.May, 6, 22, 0, 0, 0, time.UTC)
 	duration := time.Now().Sub(begin)
 	return strconv.FormatInt(duration.Nanoseconds(), 10) + "-" + strconv.Itoa(px.me)
 }
@@ -223,11 +213,9 @@ func (px *Paxos) generatePNum() string {
 func (px *Paxos) sendPrepare(seq int, v interface{}) (bool, string, interface{}) {
 	pnum := px.generatePNum()
 
-	/*
-		if (PrintDebug) {
-			fmt.Printf("%s send prepare %d:%v\n", px.peers[px.me], seq, v)
-		}
-	*/
+	if PrintDebug {
+		fmt.Printf("%s send prepare %d:%v\n", px.peers[px.me], seq, v)
+	}
 
 	arg := PrepareArgs{Seq: seq, PNum: pnum}
 	num := 0
@@ -257,11 +245,9 @@ func (px *Paxos) sendAccept(seq int, pnum string, v interface{}) bool {
 	arg := AcceptArgs{Seq: seq, PNum: pnum, Value: v}
 	num := 0
 
-	/*
-		if (PrintDebug) {
-			fmt.Printf("%s send accept %d:%v\n", px.peers[px.me], seq, v)
-		}
-	*/
+	if PrintDebug {
+		fmt.Printf("%s send accept %d:%v\n", px.peers[px.me], seq, v)
+	}
 	for i, peer := range px.peers {
 		var reply AcceptReply
 		if i == px.me {
@@ -286,11 +272,9 @@ func (px *Paxos) sendDecide(seq int, pnum string, v interface{}) {
 	px.instances[seq].v_a = v
 	px.mu.Unlock()
 
-	/*
-		if (PrintDebug) {
-			fmt.Printf("%s send decide %d:%v\n", px.peers[px.me], seq, v)
-		}
-	*/
+	if PrintDebug {
+		fmt.Printf("%s send decide %d:%v\n", px.peers[px.me], seq, v)
+	}
 
 	arg := DecideArgs{Seq: seq, PNum: pnum, Value: v, Me: px.me, Done: px.dones[px.me]}
 	for i, peer := range px.peers {
