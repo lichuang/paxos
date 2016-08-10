@@ -115,10 +115,12 @@ func (px *Paxos) Prepare(args *PrepareArgs, reply *PrepareReply) error {
 
 	instance, exist := px.instances[args.Seq]
 	if !exist {
+		// if not exist,reply OK
 		px.instances[args.Seq] = px.newInstance()
 		instance, _ = px.instances[args.Seq]
 		reply.Err = OK
 	} else {
+        // if exist, check pnum
 		if args.PNum > instance.n_p {
 			reply.Err = OK
 		} else {
@@ -130,9 +132,11 @@ func (px *Paxos) Prepare(args *PrepareArgs, reply *PrepareReply) error {
 		if PrintDebug {
 			fmt.Printf("%s:%d accept prepare\n", px.peers[px.me], args.Seq)
 		}
+        // if OK, reply accept num and value
 		reply.AcceptPnum = instance.n_a
 		reply.AcceptValue = instance.v_a
 
+        // update proposer number
 		px.instances[args.Seq].n_p = args.PNum
 	} else {
 		if PrintDebug {
@@ -149,9 +153,11 @@ func (px *Paxos) Accept(args *AcceptArgs, reply *AcceptReply) error {
 
 	instance, exist := px.instances[args.Seq]
 	if !exist {
+        // if not exist,reply OK
 		px.instances[args.Seq] = px.newInstance()
 		reply.Err = OK
 	} else {
+        // if exist, check pnum
 		if args.PNum >= instance.n_p {
 			reply.Err = OK
 		} else {
@@ -163,6 +169,7 @@ func (px *Paxos) Accept(args *AcceptArgs, reply *AcceptReply) error {
 		if PrintDebug {
 			fmt.Printf("%s:%d accept accept %v\n", px.peers[px.me], args.Seq, args.Value)
 		}
+        // update proposer number,accept num and value
 		px.instances[args.Seq].n_a = args.PNum
 		px.instances[args.Seq].n_p = args.PNum
 		px.instances[args.Seq].v_a = args.Value
@@ -187,10 +194,12 @@ func (px *Paxos) Decide(args *DecideArgs, reply *DecideReply) error {
 		px.instances[args.Seq] = px.newInstance()
 	}
 
+    // update proposer number,accept num and value,state
 	px.instances[args.Seq].v_a = args.Value
 	px.instances[args.Seq].n_a = args.PNum
 	px.instances[args.Seq].n_p = args.PNum
 	px.instances[args.Seq].state = Decided
+    // update the server done array
 	px.dones[args.Me] = args.Done
 	return nil
 }
@@ -204,6 +213,7 @@ func (px *Paxos) majority() int {
 	return len(px.peers)/2 + 1
 }
 
+// generate a proposer num
 func (px *Paxos) generatePNum() string {
 	begin := time.Date(2015, time.May, 6, 22, 0, 0, 0, time.UTC)
 	duration := time.Now().Sub(begin)
@@ -220,10 +230,12 @@ func (px *Paxos) sendPrepare(seq int, v interface{}) (bool, string, interface{})
 	arg := PrepareArgs{Seq: seq, PNum: pnum}
 	num := 0
 	replyPnum := ""
+    // first set replyValue as v
 	replyValue := v
 	for i, peer := range px.peers {
 		var reply = PrepareReply{AcceptValue: nil, AcceptPnum: "", Err: Reject}
 		if i == px.me {
+            // if the same server, just call prepare function directly
 			px.Prepare(&arg, &reply)
 		} else {
 			call(peer, "Paxos.Prepare", &arg, &reply)
@@ -231,6 +243,7 @@ func (px *Paxos) sendPrepare(seq int, v interface{}) (bool, string, interface{})
 
 		if reply.Err == OK {
 			num += 1
+            // update accept num and value if replay accept num >
 			if reply.AcceptPnum > replyPnum {
 				replyPnum = reply.AcceptPnum
 				replyValue = reply.AcceptValue
@@ -238,6 +251,8 @@ func (px *Paxos) sendPrepare(seq int, v interface{}) (bool, string, interface{})
 		}
 	}
 
+    // return reply value
+    // why return pnum not replyPnum?cause use pnum to propose replyValue
 	return num >= px.majority(), pnum, replyValue
 }
 
@@ -251,6 +266,7 @@ func (px *Paxos) sendAccept(seq int, pnum string, v interface{}) bool {
 	for i, peer := range px.peers {
 		var reply AcceptReply
 		if i == px.me {
+            // if the same server, just call accept function directly
 			px.Accept(&arg, &reply)
 		} else {
 			call(peer, "Paxos.Accept", &arg, &reply)
@@ -261,10 +277,12 @@ func (px *Paxos) sendAccept(seq int, pnum string, v interface{}) bool {
 		}
 	}
 
+    // return if qurom accept
 	return num >= px.majority()
 }
 
 func (px *Paxos) sendDecide(seq int, pnum string, v interface{}) {
+    // first update seq instance
 	px.mu.Lock()
 	px.instances[seq].state = Decided
 	px.instances[seq].n_a = pnum
@@ -279,6 +297,7 @@ func (px *Paxos) sendDecide(seq int, pnum string, v interface{}) {
 	arg := DecideArgs{Seq: seq, PNum: pnum, Value: v, Me: px.me, Done: px.dones[px.me]}
 	for i, peer := range px.peers {
 		if i == px.me {
+            // if the same server, just continue
 			continue
 		}
 		var reply DecideReply
@@ -313,6 +332,7 @@ func (px *Paxos) proposer(seq int, v interface{}) {
 //
 func (px *Paxos) Start(seq int, v interface{}) {
 	go func() {
+        // if seq < min,just return
 		if seq < px.Min() {
 			return
 		}
@@ -390,6 +410,7 @@ func (px *Paxos) Min() int {
 	px.mu.Lock()
 	defer px.mu.Unlock()
 
+    // iterator servers, get min seq
 	min := px.dones[px.me]
 	for i := range px.dones {
 		if px.dones[i] < min {
@@ -397,6 +418,7 @@ func (px *Paxos) Min() int {
 		}
 	}
 
+    // delete all instance smaller than min
 	for k, instance := range px.instances {
 		if k > min {
 			continue

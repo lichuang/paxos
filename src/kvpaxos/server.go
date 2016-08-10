@@ -102,9 +102,11 @@ func (kv *KVPaxos) ProcessOperation(v Op) {
 
 		status, val := kv.px.Status(kv.lastSeq)
 
+		// sync all decided data
 		if status == paxos.Decided {
 			log = val.(Op)
 		} else {
+            // now can sync our data
 			kv.px.Start(seq, v)
 			log = kv.wait(seq)
 		}
